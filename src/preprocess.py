@@ -25,11 +25,12 @@ def encode_with_bos_eos(sp, text: str, bos_id: int, eos_id: int):
     return [bos_id] + ids + [eos_id]
 
 
-def build_examples(sp, tsv_path: Path, max_len: int):
+def build_examples(sp, tsv_path: Path, max_len: int, direction: str):
     """
-    Build bi-directional examples:
-      zh->en: src="<2en> {zh}", tgt="{en}"
-      en->zh: src="<2zh> {en}", tgt="{zh}"
+    Build examples:
+      zh2en: src="<2en> {zh}", tgt="{en}"
+      en2zh: src="<2zh> {en}", tgt="{zh}"
+      both: create both directions
     Each example stores src_ids and tgt_ids.
     """
     bos_id = sp.bos_id()
@@ -39,10 +40,11 @@ def build_examples(sp, tsv_path: Path, max_len: int):
     dropped = 0
 
     for zh, en in read_tsv(tsv_path):
-        pairs = [
-            (f"<2en> {zh}", en),
-            (f"<2zh> {en}", zh),
-        ]
+        pairs = []
+        if direction in ("zh2en", "both"):
+            pairs.append((f"<2en> {zh}", en))
+        if direction in ("en2zh", "both"):
+            pairs.append((f"<2zh> {en}", zh))
         for src_text, tgt_text in pairs:
             src_ids = encode_with_bos_eos(sp, src_text, bos_id, eos_id)
             tgt_ids = encode_with_bos_eos(sp, tgt_text, bos_id, eos_id)
@@ -65,6 +67,9 @@ def main():
     ap.add_argument("--input_tsv", type=str, required=True)
     ap.add_argument("--output_pt", type=str, required=True)
     ap.add_argument("--max_len", type=int, default=128)
+    ap.add_argument("--direction", type=str, default="zh2en",
+                    choices=["zh2en", "en2zh", "both"],
+                    help="Direction for examples: zh2en, en2zh, or both.")
     args = ap.parse_args()
 
     spm_model = Path(args.spm_model)
@@ -81,7 +86,7 @@ def main():
     sp = spm.SentencePieceProcessor()
     sp.load(str(spm_model))
 
-    examples, dropped = build_examples(sp, input_tsv, max_len=args.max_len)
+    examples, dropped = build_examples(sp, input_tsv, max_len=args.max_len, direction=args.direction)
 
     torch.save({
         "examples": examples,
@@ -89,6 +94,7 @@ def main():
             "spm_model": str(spm_model),
             "input_tsv": str(input_tsv),
             "max_len": args.max_len,
+            "direction": args.direction,
             "num_examples": len(examples),
             "num_dropped": dropped,
             "pad_id": sp.pad_id(),

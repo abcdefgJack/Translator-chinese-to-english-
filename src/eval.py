@@ -30,15 +30,23 @@ def main():
     loader = DataLoader(ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn, num_workers=0)
 
     ckpt = torch.load(args.ckpt, map_location=device)
+    meta = ckpt.get("meta") or {}
+
+    d_model = meta.get("d_model", 256)
+    n_heads = meta.get("n_heads", 4)
+    layers = meta.get("layers", 4)
+    ffn = meta.get("ffn", 1024)
+    dropout = meta.get("dropout", 0.1)
+
     model = TransformerMT(
         vocab_size=vocab_size,
         pad_id=pad_id,
-        d_model=256,
-        n_heads=4,
-        num_encoder_layers=4,
-        num_decoder_layers=4,
-        dim_feedforward=1024,
-        dropout=0.1,
+        d_model=d_model,
+        n_heads=n_heads,
+        num_encoder_layers=layers,
+        num_decoder_layers=layers,
+        dim_feedforward=ffn,
+        dropout=dropout,
         tie_embeddings=True,
     ).to(device)
     model.load_state_dict(ckpt["model"])

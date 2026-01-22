@@ -106,6 +106,9 @@ def main():
     ap.add_argument("--repeat_penalty", type=float, default=0.8)
     ap.add_argument("--eos_boost_after", type=int, default=20)
     ap.add_argument("--eos_boost", type=float, default=0.3)
+    ap.add_argument("--direction", type=str, default="zh2en",
+                    choices=["zh2en", "en2zh", "auto"],
+                    help="Direction tag for src: zh2en, en2zh, or auto by language.")
 
     args = ap.parse_args()
 
@@ -119,7 +122,10 @@ def main():
     bos_id = sp.bos_id()
     eos_id = sp.eos_id()
 
-    ckpt = torch.load(args.ckpt, map_location=device)
+    try:
+        ckpt = torch.load(args.ckpt, map_location=device, weights_only=True)
+    except TypeError:
+        ckpt = torch.load(args.ckpt, map_location=device)
 
     model = TransformerMT(
         vocab_size=vocab_size,
@@ -135,7 +141,12 @@ def main():
     model.load_state_dict(ckpt["model"])
 
     text = args.text.strip()
-    if looks_like_chinese(text):
+    if args.direction == "auto":
+        if looks_like_chinese(text):
+            src_text = "<2en> " + text
+        else:
+            src_text = "<2zh> " + text
+    elif args.direction == "zh2en":
         src_text = "<2en> " + text
     else:
         src_text = "<2zh> " + text

@@ -54,7 +54,7 @@ class TransformerMT(nn.Module):
         self.pos_emb = PositionalEncoding(d_model, max_len=max_len)
         self.dropout = nn.Dropout(dropout)
 
-        self.transformer = nn.Transformer(
+        transformer_kwargs = dict(
             d_model=d_model,
             nhead=n_heads,
             num_encoder_layers=num_encoder_layers,
@@ -64,6 +64,10 @@ class TransformerMT(nn.Module):
             batch_first=True,  # IMPORTANT: inputs are (B,T,dim)
             norm_first=True,
         )
+        try:
+            self.transformer = nn.Transformer(**transformer_kwargs, enable_nested_tensor=False)
+        except TypeError:
+            self.transformer = nn.Transformer(**transformer_kwargs)
 
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
 
@@ -73,13 +77,10 @@ class TransformerMT(nn.Module):
 
     def _generate_square_subsequent_mask(self, t: int, device: torch.device) -> torch.Tensor:
         """
-        PyTorch Transformer expects float mask with -inf for blocked positions.
+        PyTorch Transformer expects a causal mask with upper-tri masked.
         Shape: (T, T)
         """
-        # upper triangle (excluding diagonal) should be blocked
-        mask = torch.full((t, t), float("-inf"), device=device)
-        mask = torch.triu(mask, diagonal=1)
-        return mask
+        return torch.triu(torch.ones((t, t), device=device, dtype=torch.bool), diagonal=1)
 
     def forward(
         self,
